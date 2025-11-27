@@ -23,9 +23,11 @@ const WorkoutCard = ({
       </div>
 
       <div className="workout-card__metrics">
-        <span>
-          Load <strong>{workout.load}kg</strong>
-        </span>
+        {workout.load && (
+          <span>
+            Load <strong>{workout.load}kg</strong>
+          </span>
+        )}
         <span>
           Reps <strong>{workout.reps}</strong>
         </span>

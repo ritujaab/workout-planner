@@ -10,7 +10,7 @@ const WeeklyPlanner = ({
   selectedWorkoutId,
   currentWeekDates = [],
   onSelectWorkout,
-  onDeleteWorkout = async () => {},
+  onDeleteClick = () => {},
   onToggleComplete = async () => {},
   isLoading,
 }) => {
@@ -73,29 +73,6 @@ const WeeklyPlanner = ({
     return groups;
   }, [workouts, currentWeekDates]);
 
-  const handleDelete = async (workout, date) => {
-    const formattedDate = date.toISOString().slice(0, 10);
-
-    const confirmed = window.confirm(
-      `Delete ${workout.title} on ${formattedDate}? Choose OK to delete only this day, Cancel to delete entire series.`
-    );
-
-    if (!confirmed) {
-      try {
-        await onDeleteWorkout(workout, null);
-        toast.success('Workout series removed');
-      } catch (error) {
-        toast.error(error.message || 'Unable to delete workout');
-      }
-    } else {
-      try {
-        await onDeleteWorkout(workout, date);
-        toast.success('Workout skipped for this day');
-      } catch (error) {
-        toast.error(error.message || 'Unable to update workout');
-      }
-    }
-  };
 
   const handleToggleComplete = async (workout, date, nextState) => {
     try {
@@ -127,7 +104,7 @@ const WeeklyPlanner = ({
             date={date}
             workouts={workoutsByDate[dateStr]}
             onEdit={onSelectWorkout}
-            onDelete={workout => handleDelete(workout, date)}
+            onDelete={workout => onDeleteClick(workout, date)}
             onToggleComplete={(workout, nextState) =>
               handleToggleComplete(workout, date, nextState)
             }

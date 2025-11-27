@@ -59,7 +59,7 @@ const WorkoutForm = ({ selectedWorkout, setSelectedWorkout }) => {
 
     const payload = {
       title: title.trim(),
-      load: Number(load),
+      load: load ? Number(load) : null,
       reps: Number(reps),
       dayOfWeek,
       notes: notes.trim(),
@@ -227,7 +227,7 @@ const WorkoutForm = ({ selectedWorkout, setSelectedWorkout }) => {
               fontSize: "0.9rem",
             }}
           >
-            Load (kg)
+            Load (kg) <span style={{ color: "#94a3b8", fontWeight: 400 }}>(optional)</span>
           </label>
           <input
             id="workout-load"
@@ -235,6 +235,7 @@ const WorkoutForm = ({ selectedWorkout, setSelectedWorkout }) => {
             min="1"
             value={load}
             onChange={(event) => setLoad(event.target.value)}
+            placeholder="Optional"
             style={{
               width: "100%",
               padding: "0.75rem",

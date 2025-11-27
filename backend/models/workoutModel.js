@@ -25,7 +25,7 @@ const workoutSchema = new Schema(
     },
     load: {
       type: Number,
-      required: true,
+      required: false,
       min: 1,
     },
     dayOfWeek: {

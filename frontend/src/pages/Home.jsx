@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 
 import WeeklyPlanner from '../components/planner/WeeklyPlanner';
 import WorkoutForm from '../components/workouts/WorkoutForm';
+import DeleteConfirmDialog from '../components/common/DeleteConfirmDialog';
 import { useWorkoutsContext } from '../hooks/useWorkoutsContext';
 import { useAuthContext } from '../hooks/useAuthContext';
 
@@ -26,6 +27,11 @@ const Home = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState(null);
   const [currentWeekDates, setCurrentWeekDates] = useState(getCurrentWeekDates());
+  const [deleteDialog, setDeleteDialog] = useState({
+    isOpen: false,
+    workout: null,
+    date: null,
+  });
 
   const fetchWorkouts = useCallback(async () => {
     if (!user) return;
@@ -111,10 +117,38 @@ const Home = () => {
     }
   };
 
-  const handleDeleteWorkout = async (workout, date = null) => {
+  const handleDeleteClick = (workout, date) => {
+    setDeleteDialog({
+      isOpen: true,
+      workout,
+      date,
+    });
+  };
+
+  const handleDeleteConfirm = async (action) => {
+    const { workout, date } = deleteDialog;
+    
+    try {
+      if (action === 'this') {
+        await handleDeleteWorkout(workout, date, 'this');
+        toast.success('Workout skipped for this day');
+      } else if (action === 'all') {
+        await handleDeleteWorkout(workout, date, 'all');
+        toast.success('All future occurrences removed');
+      }
+      // If action is 'cancel', do nothing
+      setDeleteDialog({ isOpen: false, workout: null, date: null });
+    } catch (error) {
+      // Error is already handled in handleDeleteWorkout
+      setDeleteDialog({ isOpen: false, workout: null, date: null });
+    }
+  };
+
+  const handleDeleteWorkout = async (workout, date = null, action = 'this') => {
     if (!user) return;
 
-    if (date) {
+    if (date && action === 'this') {
+      // Delete this instance only (skip this day)
       try {
         const response = await fetch(`/api/workouts/${workout._id}`, {
           method: 'PATCH',
@@ -138,13 +172,45 @@ const Home = () => {
           setSelectedWorkout(data);
         }
 
-        toast.success('Workout skipped for this day');
+        return data;
+      } catch (error) {
+        toast.error(error.message || 'Unable to update workout');
+        throw error;
+      }
+    } else if (date && action === 'all') {
+      // Delete all future occurrences (set endDate to day before)
+      try {
+        const endDate = new Date(date);
+        endDate.setDate(endDate.getDate() - 1);
+        
+        const response = await fetch(`/api/workouts/${workout._id}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${user.token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            endDate: endDate.toISOString(),
+          }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Unable to update workout');
+        }
+
+        dispatch({ type: 'UPDATE_WORKOUT', payload: data });
+        if (selectedWorkout?._id === workout._id) {
+          setSelectedWorkout(data);
+        }
+
         return data;
       } catch (error) {
         toast.error(error.message || 'Unable to update workout');
         throw error;
       }
     } else {
+      // Delete entire series
       try {
         const response = await fetch(`/api/workouts/${workout._id}`, {
           method: 'DELETE',
@@ -351,7 +417,7 @@ const Home = () => {
             currentWeekDates={currentWeekDates}
             selectedWorkoutId={selectedWorkout?._id}
             onSelectWorkout={setSelectedWorkout}
-            onDeleteWorkout={handleDeleteWorkout}
+            onDeleteClick={handleDeleteClick}
             onToggleComplete={handleToggleComplete}
             isLoading={isLoading}
           />
@@ -370,6 +436,13 @@ const Home = () => {
           />
         </aside>
       </div>
+      <DeleteConfirmDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={() => setDeleteDialog({ isOpen: false, workout: null, date: null })}
+        onConfirm={handleDeleteConfirm}
+        workoutTitle={deleteDialog.workout?.title}
+        date={deleteDialog.date}
+      />
     </div>
   );
 };

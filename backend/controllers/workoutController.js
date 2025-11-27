@@ -97,10 +97,6 @@ const createWorkout = async (req, res) => {
     emptyFields.push('title');
   }
 
-  if (load === undefined || load === null) {
-    emptyFields.push('load');
-  }
-
   if (reps === undefined || reps === null) {
     emptyFields.push('reps');
   }
@@ -110,8 +106,8 @@ const createWorkout = async (req, res) => {
     emptyFields.push('dayOfWeek');
   }
 
-  const normalizedLoad = normalizeNumber(load);
-  if (normalizedLoad === null || normalizedLoad <= 0) {
+  const normalizedLoad = load !== undefined && load !== null ? normalizeNumber(load) : null;
+  if (normalizedLoad !== null && normalizedLoad <= 0) {
     validationErrors.push({
       field: 'load',
       message: 'Load must be a positive number',
@@ -142,12 +138,31 @@ const createWorkout = async (req, res) => {
       .json({ error: 'Validation failed', emptyFields, details: validationErrors });
   }
 
+  // Check for duplicate workout (same title case-insensitive and same dayOfWeek)
+  try {
+    const existingWorkout = await Workout.findOne({
+      user_id: req.user._id,
+      dayOfWeek: normalizedDay,
+      title: { $regex: new RegExp(`^${trimmedTitle}$`, 'i') },
+    });
+
+    if (existingWorkout) {
+      return res.status(400).json({
+        error: 'A workout with this title already exists on this day',
+        emptyFields: ['title'],
+      });
+    }
+  } catch (error) {
+    console.error('Failed to check for duplicate workout', error);
+    // Continue with creation if check fails
+  }
+
   const sanitizedNotes = notes?.trim();
 
   try {
     const workout = await Workout.create({
       title: trimmedTitle,
-      load: normalizedLoad,
+      load: normalizedLoad || undefined,
       reps: normalizedReps,
       dayOfWeek: normalizedDay,
       notes: sanitizedNotes || undefined,
@@ -217,15 +232,19 @@ const updateWorkout = async (req, res) => {
   }
 
   if (req.body.load !== undefined) {
-    const normalizedLoad = normalizeNumber(req.body.load);
-    if (normalizedLoad === null || normalizedLoad <= 0) {
-      validationErrors.push({
-        field: 'load',
-        message: 'Load must be a positive number',
-      });
-      emptyFields.push('load');
+    if (req.body.load === null || req.body.load === '') {
+      updates.load = undefined;
     } else {
-      updates.load = normalizedLoad;
+      const normalizedLoad = normalizeNumber(req.body.load);
+      if (normalizedLoad === null || normalizedLoad <= 0) {
+        validationErrors.push({
+          field: 'load',
+          message: 'Load must be a positive number',
+        });
+        emptyFields.push('load');
+      } else {
+        updates.load = normalizedLoad;
+      }
     }
   }
 
@@ -313,6 +332,26 @@ const updateWorkout = async (req, res) => {
     const workout = await Workout.findOne({ _id: id, user_id: req.user._id });
     if (!workout) {
       return res.status(404).json({ error: 'Workout not found' });
+    }
+
+    // Check for duplicate workout if title or dayOfWeek is being updated
+    const titleToCheck = updates.title || workout.title;
+    const dayToCheck = updates.dayOfWeek || workout.dayOfWeek;
+    
+    if (updates.title !== undefined || updates.dayOfWeek !== undefined) {
+      const existingWorkout = await Workout.findOne({
+        user_id: req.user._id,
+        _id: { $ne: id }, // Exclude current workout
+        dayOfWeek: dayToCheck,
+        title: { $regex: new RegExp(`^${titleToCheck.trim()}$`, 'i') },
+      });
+
+      if (existingWorkout) {
+        return res.status(400).json({
+          error: 'A workout with this title already exists on this day',
+          emptyFields: ['title'],
+        });
+      }
     }
 
     // Apply simple updates
